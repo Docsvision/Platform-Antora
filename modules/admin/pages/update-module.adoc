@@ -3,10 +3,15 @@
 :restart: dvappserver
 :update: platform
 :installer: {dv} Platform server.msi
+:mod-log-req: {pl-log-req}
+:mod: Платформы
+:link: platform:console:logs
 
 = Обновление модуля
 
 include::webclient:ROOT:partial$excerpts.adoc[tags=what-changed]
+
+include::GBL-3610@engineer:ROOT:partial$excerpts.adoc[tags=update-log]
 
 include::partial$update-conditions.adoc[]
 

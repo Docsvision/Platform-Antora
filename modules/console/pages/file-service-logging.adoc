@@ -1,5 +1,5 @@
 :of-what: {of-fs}
-:version: модуля {pl} {pl-log-req}
+:version: модуля {fs} {fs-log-req}
 
 = Настроить протоколирование работы файлового сервиса
 
@@ -21,23 +21,23 @@ include::GBL-3610@engineer:ROOT:partial$excerpts.adoc[tags=nlog-json]
 ----
 {
   "NLog": {
-    "throwConfigExceptions": true,
-    "extensions": [
+    "throwConfigExceptions": false, <.>
+    "extensions": [ <.>
       { "assembly": "NLog.Extensions.Logging" },
       { "assembly": "NLog.Web.AspNetCore" }
     ],
-    "variables": {
-      "fileLogLevel": "${environment:DV_FILE_LOG_LEVEL:default=Error}",
-      "consoleLogLevel": "${environment:DV_CONSOLE_LOG_LEVEL:default=Info}",
-      "enableFileLogging": "${environment:DV_ENABLE_FILE_LOGGING:default=false}",
-      "enableConsoleLogging": "${environment:DV_ENABLE_CONSOLE_LOGGING:default=true}",
-      "jsonFileLayout": {
-        "type": "JsonLayout",
-        "includeAllProperties": true,
-        "attributes": [
+    "variables": { <.>
+      "fileLogLevel": "Error", <.>
+      "consoleLogLevel": "Error", <.>
+      "enableFileLogging": "true", <.>
+      "enableConsoleLogging": "true", <.>
+      "jsonLayout": { <.>
+        "type": "JsonLayout", <.>
+        "includeAllProperties": true, <.>
+        "attributes": [ <.>
           {
-            "name": "timestamp",
-            "layout": "${date:format=yyyy-MM-dd HH\\:mm\\:ss.fff}"
+            "name": "timestamp", <.>
+            "layout": "${date:format=yyyy-MM-dd HH\\:mm\\:ss.fff}" <.>
           },
           {
             "name": "level",
@@ -49,68 +49,87 @@ include::GBL-3610@engineer:ROOT:partial$excerpts.adoc[tags=nlog-json]
           },
           {
             "name": "message",
-            "layout": "${message:withexception=true}"
+            "layout": "${message:withException=true}"
+          },
+          {
+            "name": "processId",
+            "layout": "${processid}"
           }
         ]
       }
     },
-    "targets": {
-      "async": true,
-      "logConsole": {
-        "type": "Console",
-        "layout": {
-          "type": "JsonLayout",
-          "includeAllProperties": true,
-          "indentJson": true,
-          "attributes": [
-            {
-              "name": "timestamp",
-              "layout": "${date:format=yyyy-MM-dd HH\\:mm\\:ss.fff}"
-            },
-            {
-              "name": "level",
-              "layout": "${level:upperCase=true}"
-            },
-            {
-              "name": "module",
-              "layout": "${logger}"
-            },
-            {
-              "name": "message",
-              "layout": "${message:withexception=true}",
-              "encode": false
-            }
-          ]
-        }
+    "targets": { <.>
+      "async": true, <.>
+      "logFile": { <.>
+        "type": "File", <.>
+        "fileName": "${gdc:baseLogFolder}/${gdc:moduleName}/${gdc:moduleName}.log", <.>
+        "layout": "${var:jsonLayout}", <.>
+        "archiveEvery": "Day", <.>
+        "archiveAboveSize": 314572800, <.>
+        "archiveFileName": "${gdc:baseLogFolder}/${gdc:moduleName}/archives/${gdc:moduleName} {#}.log", <.>
+        "archiveNumbering": "DateAndSequence", <.>
+        "archiveDateFormat": "yyyy-MM-dd", <.>
+        "maxArchiveFiles": 30, <.>
+        "createDirs": true <.>
       },
+      "logConsole": { <.>
+        "type": "Console",
+        "layout": "${var:jsonLayout}"
+      }
     },
-    "rules": [
+    "rules": [ <.>
       {
         "logger": "Microsoft.*",
-        "maxlevel": "Warn",
-        "final": true
-      },
-      {
-        "logger": "DatabaseManager.Logger.*",
-        "minLevel": "Info",
-        "writeTo": "logDatabaseManagerFile",
+        "maxLevel": "Warn",
         "final": true
       },
       {
         "logger": "*",
-        "minlevel": "${when:when='${var:enableFileLogging}' == 'true':inner=${var:fileLogLevel}:else=Off}",
-        "writeTo": "logAppServerFile"
+        "minLevel": "${when:when='${var:enableFileLogging}' == 'true':inner=${var:fileLogLevel}:else=Off}",
+        "writeTo": "logFile"
       },
       {
         "logger": "*",
-        "minlevel": "${when:when='${var:enableConsoleLogging}' == 'true':inner=${var:consoleLogLevel}:else=Off}",
+        "minLevel": "${when:when='${var:enableConsoleLogging}' == 'true':inner=${var:consoleLogLevel}:else=Off}",
         "writeTo": "logConsole"
       }
     ]
   },
 }
 ----
-<.> Путь к файлу журнала настраивается в параметре `\{gdc:baseLogFolder}`. По умолчанию используется каталог `/var/log/docsvision/fileservice` в Linux и `C:\ProgramData\docsvision\fileService\fileservice.log` в Windows.
-<.> Уровень журналирования, по умолчанию используется `Warn`.
+<.> `throwConfigExceptions` -- определяет поведение приложения при обнаружении ошибок в конфигурации NLog.
++
+Если параметр установлен в `true`, любая ошибка в конфигурации вызовет исключение.
++
+<.> `extensions` -- загружает дополнительные сборки (`.dll`), расширяющие возможности NLog.
+<.> `variables` -- раздел определяет параметры, которые используются в других частях конфигурации.
+<.> `fileLogLevel` -- задаёт уровень журналирования для файла журнала.
+<.> `consoleLogLevel` -- задаёт уровень журналирования для консоли (stdout/stderr).
+<.> `enableFileLogging` -- включает или отключает ведение журнала в файл.
+<.> `enableConsoleLogging` -- включает или отключает ведение журнала в консоль (stdout/stderr).
+<.> `jsonLayout` -- определяет JSON-структуру сообщений журнала.
+<.> `type` -- указывает на использование JSON-макета.
+<.> `includeAllProperties` -- регулирует, будут ли добавляться в вывод все дополнительные свойства, переданные в контексте журналирования.
+<.> `attributes` -- раздел с парными параметрами вида `"name"`/`"layout"`, определяющий поля JSON.
+<.> `name` -- значение `timestamp` добавляет отметку времени.
+<.> `layout` -- значение `${date:format=yyyy-MM-dd HH\\:mm\\:ss.fff}` задаёт формат отображения времени.
+<.> `targets` -- настройки режимов журналирования.
+<.> `async` -- регулирует асинхронную обработку целей, указанных в этом блоке. Журналирование выполняется в фоновом режиме, не блокируя работу системы, что повышает производительность при высокой нагрузке.
+<.> `logFile` -- настройки для режима вывода журнала в файл.
+<.> `type` -- указывает на использование файла.
+<.> `fileName` -- формирует шаблон имени файла, в параметре можно использовать https://github.com/nlog/NLog/wiki/File-target[допустимые для NLog переменные].
+<.> `layout` -- ссылка на общий JSON-формат, определённый в `jsonLayout`.
+<.> `archiveEvery` -- создавать новый архивный файл каждый заданный период, по умолчанию -- каждый день.
+<.> `archiveAboveSize` -- если текущий файл превышает `300` Мб (значение по умолчанию), он будет немедленно архивирован, даже если заданный в `archiveEvery` период не завершился.
+<.> `archiveFileName` -- шаблон имени для архивов, `&#123;#&#125;` заменяется на номер архива.
+<.> `archiveNumbering` -- значение `DateAndSequence` задаёт нумерацию архивов по дате и порядковому номеру (например, `MyLog 2026-09-09 1.log`).
+<.> `archiveDateFormat` -- задаёт формат даты, которая подставляется в имя архивного файла при архивации журнала.
+<.> `maxArchiveFiles` -- максимальное количество архивных файлов, после которого старые файлы будут удаляться. По умолчанию -- `30`.
+<.> `createDirs` -- флаг регулирует автоматическое создание каталогов журналов. Каталоги будут создаваться автоматически, когда флаг в значении `true`.
+<.> `logConsole` -- настройки для режима вывода журнала в stdout/stderr процесса, например _journald_ в терминале Linux. Формат -- тот же JSON, что и для файла.
+<.> `rules` -- правила журналирования. Определяют, какой логгер (`logger`), с каким уровнем (`minLevel`, `maxLevel`) и в каком режиме (`writeTo`) будет писать сообщения.
++
+Допустимые уровни протоколирования приведены https://github.com/nlog/NLog/wiki/Configuration-file#log-levels[на странице NLog в GitHub]. +
+Для получения дополнительной информации о других настройках NLog обратитесь к документации по данной платформе.
 
 include::GBL-3610@engineer:ROOT:partial$modes-archivation-redefine.adoc[]
